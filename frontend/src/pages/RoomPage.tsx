@@ -81,9 +81,7 @@ export default function RoomPage() {
   }
 
   const players = state?.players ?? []
-  const pot = 0 // Pot = chips removed from players (not tracked as a player)
   const me = players.find((p) => p.id === myId)
-  const others = players.filter((p) => p.id !== myId)
 
   const totalChips = players.reduce((sum, p) => sum + p.balance, 0)
 
