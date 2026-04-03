@@ -14,6 +14,7 @@ export function useSocket(roomCode: string | undefined, token: string | null) {
     if (!roomCode || !token) return
 
     const socket = io(BACKEND_URL, { 
+      path: "/api/socket.io",
       transports: ['websocket'],
       auth: { token }
     })

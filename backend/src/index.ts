@@ -26,10 +26,11 @@ app.use(((err, req, res, next) => {
 }) as express.ErrorRequestHandler);
 
 // Auth Routes
-app.use("/auth", authRouter);
+app.use(["/api/auth", "/auth"], authRouter);
 
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
+  path: "/api/socket.io",
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
@@ -61,8 +62,10 @@ async function getRoomState(roomCode: string) {
 
 // ─── REST Routes ─────────────────────────────────────────────────────────────
 
+const roomRouter = express.Router();
+
 /** POST /rooms – Create a new room with a banker */
-app.post("/rooms", requireAuth, async (req: AuthRequest, res) => {
+roomRouter.post("/", requireAuth, async (req: AuthRequest, res) => {
   const { bankerName, gameType } = req.body as { bankerName: string; gameType: string };
   if (!bankerName?.trim()) {
     res.status(400).json({ error: "bankerName is required" });
@@ -109,7 +112,7 @@ app.post("/rooms", requireAuth, async (req: AuthRequest, res) => {
 });
 
 /** POST /rooms/join – Join an existing room */
-app.post("/rooms/join", requireAuth, async (req: AuthRequest, res) => {
+roomRouter.post("/join", requireAuth, async (req: AuthRequest, res) => {
   const { code, playerName } = req.body as { code: string; playerName: string };
   if (!code?.trim() || !playerName?.trim()) {
     res.status(400).json({ error: "code and playerName are required" });
@@ -147,7 +150,7 @@ app.post("/rooms/join", requireAuth, async (req: AuthRequest, res) => {
 });
 
 /** GET /rooms/:code – Fetch full room state details */
-app.get("/rooms/:code", requireAuth, async (req: AuthRequest, res) => {
+roomRouter.get("/:code", requireAuth, async (req: AuthRequest, res) => {
   try {
     const state = await getRoomState((req.params.code as string).toUpperCase());
     if (!state) {
@@ -160,6 +163,8 @@ app.get("/rooms/:code", requireAuth, async (req: AuthRequest, res) => {
     res.status(500).json({ error: "Failed to fetch room state." });
   }
 });
+
+app.use(["/api/rooms", "/rooms"], roomRouter);
 
 // ─── Socket.IO ───────────────────────────────────────────────────────────────
 
