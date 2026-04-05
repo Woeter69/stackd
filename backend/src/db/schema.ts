@@ -12,6 +12,7 @@ export const rooms = pgTable("rooms", {
   id: uuid("id").primaryKey().defaultRandom(),
   code: varchar("code", { length: 5 }).notNull().unique(),
   gameType: varchar("game_type", { length: 20 }).notNull().default("poker"),
+  pot: integer("pot").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

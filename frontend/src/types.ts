@@ -3,7 +3,8 @@
 export interface Room {
   id: string
   code: string
-  gameType: 'poker' | 'blackjack'
+  gameType: 'poker' | 'blackjack' | 'baccarat'
+  pot: number
   createdAt: string
 }
 

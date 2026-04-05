@@ -4,7 +4,7 @@ import type { RoomState, TransferPayload, MintPayload } from '../types'
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:3001'
 
-export function useSocket(roomCode: string | undefined, token: string | null) {
+export function useSocket(roomCode: string | undefined, token: string | null, onChipFly?: (payload: any) => void) {
   const socketRef = useRef<Socket | null>(null)
   const [state, setState] = useState<RoomState | null>(null)
   const [connected, setConnected] = useState(false)
@@ -29,6 +29,10 @@ export function useSocket(roomCode: string | undefined, token: string | null) {
 
     socket.on('STATE_UPDATE', (newState: RoomState) => {
       setState(newState)
+    })
+
+    socket.on('CHIP_FLY', (payload: any) => {
+      if (onChipFly) onChipFly(payload)
     })
 
     socket.on('ERROR', ({ message }: { message: string }) => {

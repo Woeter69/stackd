@@ -3,7 +3,7 @@ import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
 import "dotenv/config";
-import { db } from "./db";
+import { db, runMigrations } from "./db";
 import { rooms, players, transactions, users } from "./db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
@@ -243,8 +243,20 @@ io.on("connection", (socket) => {
             .where(eq(users.id, sender.userId));
         }
 
-        // Credit receiver (skip if POT – pot is just chips removed from play)
-        if (receiverId !== "POT") {
+        // Credit receiver or pot
+        if (receiverId === "POT") {
+          // Chip goes to the room pot
+          const [roomRow] = await db
+            .select()
+            .from(rooms)
+            .where(eq(rooms.code, roomCode.toUpperCase()));
+          if (roomRow) {
+            await db
+              .update(rooms)
+              .set({ pot: sql`pot + ${amount}` })
+              .where(eq(rooms.id, roomRow.id));
+          }
+        } else {
           const [receiver] = await db
             .select()
             .from(players)
@@ -286,10 +298,10 @@ io.on("connection", (socket) => {
         const state = await getRoomState(roomCode.toUpperCase());
         io.to(roomCode.toUpperCase()).emit("STATE_UPDATE", state);
       } catch (err) {
-        console.error("[TRANSFER error]", err);
+        console.error("[TRANSFER]", err);
         socket.emit("ERROR", { message: "Transfer failed" });
       }
-    }
+    },
   );
 
   /**

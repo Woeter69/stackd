@@ -1,16 +1,48 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Copy, Check, Wifi, WifiOff, Crown, User2, Coins } from 'lucide-react'
+import { Copy, Check, Wifi, WifiOff, Crown, Coins } from 'lucide-react'
 import { useSocket } from '../hooks/useSocket'
 import Chip from '../components/Chip'
+import TableBoard, { type TableBoardHandle } from '../components/TableBoard'
+import { useBetAnimation } from '../hooks/useBetAnimation'
+import ChipAnimationLayer from '../components/ChipAnimationLayer'
 import { useAuth } from '../context/AuthContext'
-import { CHIP_DENOMINATIONS, CHIP_COLORS, type ChipValue, type Player } from '../types'
+import { CHIP_DENOMINATIONS, type ChipValue } from '../types'
 
 export default function RoomPage() {
   const { code } = useParams<{ code: string }>()
   const navigate = useNavigate()
-  const { token } = useAuth()
-  const { state, setState, connected, socketError, transfer, mint } = useSocket(code, token)
+  const { token, user } = useAuth()
+  const boardRef = useRef<TableBoardHandle>(null)
+  const { chips, tableRef, fireChip } = useBetAnimation()
+
+  const handleChipFly = useCallback((payload: { senderId: string; receiverId: string; amount: number }) => {
+    if (!boardRef.current) return
+    const { senderId, receiverId, amount } = payload
+    
+    // Determine largest chip to fly visually
+    const denom = [...CHIP_DENOMINATIONS].reverse().find(d => amount >= d) ?? 1
+    
+    // Pot is always the center pot zone. MINT implies banker to player, or from pot? MINT means "BANKER_MINT".
+    // For visual purposes, MINT flies from the pot zone to the player.
+    const fromEl = senderId === 'BANKER_MINT' ? boardRef.current.getPotEl() : boardRef.current.getSeatEl(senderId)
+    const toEl = receiverId === 'POT' ? boardRef.current.getPotEl() : boardRef.current.getSeatEl(receiverId)
+    
+    // Trigger animation
+    fireChip(denom as ChipValue, fromEl, toEl)
+    
+    // Pot Pulse FX
+    if (receiverId === 'POT' || senderId === 'BANKER_MINT') {
+      const pot = boardRef.current.getPotEl()
+      if (pot) {
+        pot.classList.remove('pot-pulse')
+        void pot.offsetWidth // trigger reflow
+        pot.classList.add('pot-pulse')
+      }
+    }
+  }, [fireChip])
+
+  const { state, setState, connected, socketError, transfer, mint } = useSocket(code, token, handleChipFly)
 
   // Our identity from sessionStorage
   const myId = sessionStorage.getItem('playerId') ?? ''
@@ -87,6 +119,7 @@ export default function RoomPage() {
 
   return (
     <div className="min-h-screen bg-[#0f172a] flex flex-col">
+      <ChipAnimationLayer chips={chips} />
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-10 bg-[#1e293b]/90 backdrop-blur border-b border-[#334155] px-4 py-3 flex items-center justify-between">
@@ -119,24 +152,16 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* ── Player Grid ────────────────────────────────────────────────── */}
-      <main className="flex-1 p-4 overflow-y-auto">
-        {state?.room?.gameType === 'blackjack' && (
-          <div className="mb-6">
-            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Dealer</h2>
-            {players.filter(p => p.role === 'banker').map(player => (
-              <PlayerCard key={player.id} player={player} isMe={player.id === myId} />
-            ))}
-          </div>
-        )}
-
-        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">
-          {state?.room?.gameType === 'blackjack' ? 'Players' : 'Players'}
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {players.filter(p => state?.room?.gameType === 'poker' || p.role !== 'banker').map((player) => (
-            <PlayerCard key={player.id} player={player} isMe={player.id === myId} />
-          ))}
+      {/* ── Game Board Area ──────────────────────────────────────────────── */}
+      <main className="flex-1 p-4 overflow-y-auto flex flex-col items-center justify-center">
+        <div className="w-full max-w-4xl" ref={tableRef}>
+          <TableBoard
+            ref={boardRef}
+            room={state?.room!}
+            players={players}
+            myId={myId}
+            isBaccarat={state?.room?.gameType === 'baccarat'}
+          />
         </div>
 
         {/* Banker Mint Panel */}
@@ -196,7 +221,7 @@ export default function RoomPage() {
                     className="active:scale-95 transition-transform"
                     title={`Add $${denom} chip`}
                   >
-                    <Chip value={denom} colorClass={CHIP_COLORS[denom]} size={42} />
+                    <Chip value={denom} size={42} />
                   </button>
                   {count > 0 && (
                     <button
@@ -226,12 +251,12 @@ export default function RoomPage() {
             onChange={(e) => setTargetId(e.target.value)}
             className="px-3 py-2 rounded-lg bg-[#0f172a] border border-[#334155] text-sm text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 flex-1 min-w-[130px]"
           >
-            {state?.room?.gameType !== 'blackjack' && <option value="POT">→ Pot</option>}
+            {state?.room?.gameType !== 'blackjack' && <option value="POT">→ {state?.room?.gameType === 'baccarat' ? 'Table Zones' : 'Pot'}</option>}
             {players
               .filter((p) => p.id !== myId)
               .map((p) => (
                 <option key={p.id} value={p.id}>
-                  → {p.role === 'banker' && state?.room?.gameType === 'blackjack' ? `Dealer (${p.name})` : p.name}
+                  → {p.role === 'banker' ? `Dealer (${p.name})` : p.name}
                 </option>
               ))}
           </select>
@@ -254,40 +279,6 @@ export default function RoomPage() {
           )}
         </div>
       </div>
-    </div>
-  )
-}
-
-// ── Sub-component: PlayerCard ─────────────────────────────────────────────────
-
-function PlayerCard({ player, isMe }: { player: Player; isMe: boolean }) {
-  return (
-    <div
-      className={`rounded-xl p-4 border flex flex-col gap-2 transition-all ${
-        isMe
-          ? 'bg-emerald-900/20 border-emerald-700/60'
-          : 'bg-[#1e293b] border-[#334155] hover:border-slate-400/40'
-      }`}
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          {player.role === 'banker' ? (
-            <Crown className="w-3.5 h-3.5 text-amber-400" />
-          ) : (
-            <User2 className="w-3.5 h-3.5 text-slate-500" />
-          )}
-          <span className="text-xs text-slate-400 capitalize">{player.role}</span>
-        </div>
-        {isMe && (
-          <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-900/40 px-1.5 py-0.5 rounded-full">
-            you
-          </span>
-        )}
-      </div>
-      <p className="text-sm font-semibold text-white truncate">{player.name}</p>
-      <p className="text-xl font-bold text-emerald-400 tabular-nums">
-        ${player.balance.toLocaleString()}
-      </p>
     </div>
   )
 }
