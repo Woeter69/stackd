@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Copy, Check, Wifi, WifiOff, Crown, Coins } from 'lucide-react'
+import { Copy, Check, Wifi, WifiOff, Coins } from 'lucide-react'
 import { useSocket } from '../hooks/useSocket'
 import Chip from '../components/Chip'
 import TableBoard, { type TableBoardHandle } from '../components/TableBoard'
@@ -12,7 +12,7 @@ import { CHIP_DENOMINATIONS, type ChipValue } from '../types'
 export default function RoomPage() {
   const { code } = useParams<{ code: string }>()
   const navigate = useNavigate()
-  const { token, user } = useAuth()
+  const { token } = useAuth()
   const boardRef = useRef<TableBoardHandle>(null)
   const { chips, tableRef, fireChip } = useBetAnimation()
 
